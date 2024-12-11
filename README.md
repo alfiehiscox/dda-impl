@@ -1,3 +1,3 @@
 # dda implementation
 
-[see here](youtube.com/watch?v=NbSee-XM7WA)
+[see here](http://youtube.com/watch?v=NbSee-XM7WA)
