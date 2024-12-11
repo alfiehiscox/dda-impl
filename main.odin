@@ -37,10 +37,10 @@ main :: proc() {
 		mouse_cell := mouse / CELL_SIZE
 		cell := IVector2{i32(mouse_cell.x), i32(mouse_cell.y)}
 
-		if rl.IsKeyDown(.W) do player.y -= 200 * delta
-		if rl.IsKeyDown(.A) do player.x -= 200 * delta
-		if rl.IsKeyDown(.S) do player.y += 200 * delta
-		if rl.IsKeyDown(.D) do player.x += 200 * delta
+		if rl.IsKeyDown(.W) do player.y -= 25 * delta
+		if rl.IsKeyDown(.A) do player.x -= 25 * delta
+		if rl.IsKeyDown(.S) do player.y += 25 * delta
+		if rl.IsKeyDown(.D) do player.x += 25 * delta
 
 		if rl.IsMouseButtonDown(.LEFT) {
 			grid[cell.y * i32(MAP_SIZE.x) + cell.x] = 1
@@ -115,37 +115,33 @@ main :: proc() {
 
 		rl.BeginDrawing()
 
-		draw(mouse, player)
+		rl.ClearBackground(rl.BLACK)
+
+		for y := 0; y < int(MAP_SIZE.y); y += 1 {
+			for x := 0; x < int(MAP_SIZE.x); x += 1 {
+				cell := grid[y * int(MAP_SIZE.x) + x]
+				if cell == 1 {
+					rl.DrawRectangleV(rl.Vector2{f32(x), f32(y)} * CELL_SIZE, CELL_SIZE, rl.BLUE)
+				} else {
+					rl.DrawRectangleLines(
+						i32(f32(x) * CELL_SIZE.x),
+						i32(f32(y) * CELL_SIZE.y),
+						i32(CELL_SIZE.x),
+						i32(CELL_SIZE.y),
+						rl.DARKGRAY,
+					)
+				}
+			}
+		}
+
+		rl.DrawLineV(player * CELL_SIZE, mouse, rl.WHITE)
+		rl.DrawCircleV(mouse, CIRCLE_RAD, rl.WHITE)
+		rl.DrawCircleV(player * CELL_SIZE, CIRCLE_RAD, rl.RED)
 		if tile_found do rl.DrawCircleV(intersection * CELL_SIZE, CIRCLE_RAD, rl.GREEN)
 
 		rl.EndDrawing()
 	}
 
-}
-
-draw :: proc(mouse, player: rl.Vector2) {
-	rl.ClearBackground(rl.BLACK)
-
-	for y := 0; y < int(MAP_SIZE.y); y += 1 {
-		for x := 0; x < int(MAP_SIZE.x); x += 1 {
-			cell := grid[y * int(MAP_SIZE.x) + x]
-			if cell == 1 {
-				rl.DrawRectangleV(rl.Vector2{f32(x), f32(y)} * CELL_SIZE, CELL_SIZE, rl.BLUE)
-			} else {
-				rl.DrawRectangleLines(
-					i32(f32(x) * CELL_SIZE.x),
-					i32(f32(y) * CELL_SIZE.y),
-					i32(CELL_SIZE.x),
-					i32(CELL_SIZE.y),
-					rl.DARKGRAY,
-				)
-			}
-		}
-	}
-
-	rl.DrawLineV(player, mouse, rl.WHITE)
-	rl.DrawCircleV(mouse, CIRCLE_RAD, rl.WHITE)
-	rl.DrawCircleV(player, CIRCLE_RAD, rl.RED)
 }
 
 print_memory_usage :: proc(tracking_allocator: ^mem.Tracking_Allocator, stats := false) {
