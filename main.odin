@@ -1,20 +1,21 @@
 package main
 
 import "core:fmt"
+import "core:math"
+import "core:math/linalg"
 import "core:mem"
 import "core:os"
 import rl "vendor:raylib"
 
-CELL_WIDTH :: 24
-CELL_HEIGHT :: 24
+IVector2 :: [2]i32
 
-WINDOW_CELL_WIDTH :: 35
-WINDOW_CELL_HEIGHT :: 35
+CELL_SIZE: rl.Vector2 : {16, 16}
+
+MAP_SIZE: IVector2 : {32, 32}
 
 CIRCLE_RAD :: 5
 
-grid := [WINDOW_CELL_HEIGHT][WINDOW_CELL_WIDTH]int{}
-
+grid := [i32(MAP_SIZE.x * MAP_SIZE.y)]int{}
 
 main :: proc() {
 	default := context.allocator
@@ -24,68 +25,127 @@ main :: proc() {
 	context.allocator = mem.tracking_allocator(&tracking_allocator)
 	defer print_memory_usage(&tracking_allocator)
 
-	rl.InitWindow(WINDOW_CELL_WIDTH * CELL_WIDTH, WINDOW_CELL_HEIGHT * CELL_HEIGHT, "dda impl")
+	rl.InitWindow(MAP_SIZE.x * i32(CELL_SIZE.x), MAP_SIZE.y * i32(CELL_SIZE.y), "dda impl")
 	defer rl.CloseWindow()
 	rl.SetTargetFPS(60)
 
-	red_dot_pos := rl.Vector2{0, 0}
+	player := rl.Vector2{0, 0}
 
 	for !rl.WindowShouldClose() {
 		delta := rl.GetFrameTime()
 		mouse := rl.GetMousePosition()
+		mouse_cell := mouse / CELL_SIZE
+		cell := IVector2{i32(mouse_cell.x), i32(mouse_cell.y)}
 
-		if rl.IsKeyDown(.W) do red_dot_pos.y -= 200 * delta
-		if rl.IsKeyDown(.A) do red_dot_pos.x -= 200 * delta
-		if rl.IsKeyDown(.S) do red_dot_pos.y += 200 * delta
-		if rl.IsKeyDown(.D) do red_dot_pos.x += 200 * delta
+		if rl.IsKeyDown(.W) do player.y -= 200 * delta
+		if rl.IsKeyDown(.A) do player.x -= 200 * delta
+		if rl.IsKeyDown(.S) do player.y += 200 * delta
+		if rl.IsKeyDown(.D) do player.x += 200 * delta
 
 		if rl.IsMouseButtonDown(.LEFT) {
-			x := int(mouse.x / CELL_WIDTH)
-			y := int(mouse.y / CELL_HEIGHT)
-			grid[y][x] = 1
+			grid[cell.y * i32(MAP_SIZE.x) + cell.x] = 1
+		}
+
+		// DDA Implementation 
+		ray_start := player
+		ray_dir := linalg.normalize(mouse_cell - player)
+
+		ray_unit_step_size := rl.Vector2 {
+			math.sqrt(1 + (ray_dir.y / ray_dir.x) * (ray_dir.y / ray_dir.x)),
+			math.sqrt(1 + (ray_dir.x / ray_dir.y) * (ray_dir.x / ray_dir.y)),
+		}
+
+		// Which tile we're currently in
+		map_check: IVector2 = {i32(ray_start.x), i32(ray_start.y)}
+
+		//// x = length of ray in accumulated columns 
+		//// y = lenght of ray in accumulated rows 
+		ray_length_in_1d: rl.Vector2
+
+		//// The x and y directions we walk 
+		step: IVector2
+
+		if ray_dir.x < 0 {
+			step.x = -1
+			ray_length_in_1d.x = (ray_start.x - f32(map_check.x)) * ray_unit_step_size.x
+		} else {
+			step.x = 1
+			ray_length_in_1d.x = (f32(map_check.x + 1) - ray_start.x) * ray_unit_step_size.x
+		}
+
+		if ray_dir.y < 0 {
+			step.y = -1
+			ray_length_in_1d.y = (ray_start.y - f32(map_check.y)) * ray_unit_step_size.y
+		} else {
+			step.y = 1
+			ray_length_in_1d.y = (f32(map_check.y + 1) - ray_start.y) * ray_unit_step_size.y
+		}
+
+		tile_found := false
+		max_distance: f32 = 1000
+		distance: f32 = 0
+
+		for !tile_found && (distance < max_distance) {
+
+			if ray_length_in_1d.x < ray_length_in_1d.y {
+				map_check.x += step.x
+				distance = ray_length_in_1d.x
+				ray_length_in_1d.x += ray_unit_step_size.x
+			} else {
+				map_check.y += step.y
+				distance = ray_length_in_1d.y
+				ray_length_in_1d.y += ray_unit_step_size.y
+			}
+
+			if map_check.x >= 0 &&
+			   map_check.x < MAP_SIZE.x &&
+			   map_check.y >= 0 &&
+			   map_check.y < MAP_SIZE.y {
+				if grid[map_check.y * MAP_SIZE.x + map_check.x] == 1 {
+					tile_found = true
+				}
+			}
+
+		}
+
+		intersection: rl.Vector2
+		if tile_found {
+			intersection = ray_start + ray_dir * distance
 		}
 
 		rl.BeginDrawing()
-		rl.ClearBackground(rl.BLACK)
 
-		for row, row_idx in grid {
-			for cell, col_idx in row {
-				if cell == 1 {
-					rl.DrawRectangle(
-						i32(col_idx * CELL_WIDTH),
-						i32(row_idx * CELL_HEIGHT),
-						CELL_WIDTH,
-						CELL_HEIGHT,
-						rl.BLUE,
-					)
-					rl.DrawRectangleLines(
-						i32(col_idx * CELL_WIDTH),
-						i32(row_idx * CELL_HEIGHT),
-						CELL_WIDTH,
-						CELL_HEIGHT,
-						rl.WHITE,
-					)
-				} else {
-					rl.DrawRectangleLines(
-						i32(col_idx * CELL_WIDTH),
-						i32(row_idx * CELL_HEIGHT),
-						CELL_WIDTH,
-						CELL_HEIGHT,
-						rl.WHITE,
-					)
-				}
-			}
-		}
-
-		rl.DrawCircleV(mouse, CIRCLE_RAD, rl.WHITE)
-
-		rl.DrawCircleV(red_dot_pos, CIRCLE_RAD, rl.RED)
-
-		rl.DrawLineV(red_dot_pos, mouse, rl.WHITE)
+		draw(mouse, player)
+		if tile_found do rl.DrawCircleV(intersection * CELL_SIZE, CIRCLE_RAD, rl.GREEN)
 
 		rl.EndDrawing()
 	}
 
+}
+
+draw :: proc(mouse, player: rl.Vector2) {
+	rl.ClearBackground(rl.BLACK)
+
+	for y := 0; y < int(MAP_SIZE.y); y += 1 {
+		for x := 0; x < int(MAP_SIZE.x); x += 1 {
+			cell := grid[y * int(MAP_SIZE.x) + x]
+			if cell == 1 {
+				rl.DrawRectangleV(rl.Vector2{f32(x), f32(y)} * CELL_SIZE, CELL_SIZE, rl.BLUE)
+			} else {
+				rl.DrawRectangleLines(
+					i32(f32(x) * CELL_SIZE.x),
+					i32(f32(y) * CELL_SIZE.y),
+					i32(CELL_SIZE.x),
+					i32(CELL_SIZE.y),
+					rl.DARKGRAY,
+				)
+			}
+		}
+	}
+
+	rl.DrawLineV(player, mouse, rl.WHITE)
+	rl.DrawCircleV(mouse, CIRCLE_RAD, rl.WHITE)
+	rl.DrawCircleV(player, CIRCLE_RAD, rl.RED)
 }
 
 print_memory_usage :: proc(tracking_allocator: ^mem.Tracking_Allocator, stats := false) {
